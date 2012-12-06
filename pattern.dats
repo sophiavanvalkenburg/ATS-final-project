@@ -6,12 +6,13 @@
  * and matches a given pattern and string using two methods
  *)
 
-#define nil list0_nil // writing [nil] for list0_nil
-#define :: list0_cons // writing [::] for list0_cons
-#define cons list0_cons // writing [cons] for list0_cons
-
 staload "prelude/DATS/list.dats"
 staload "prelude/DATS/list_vt.dats"
+
+typedef cont_vt (a: viewt@ype, b: t@ype) = (a) -<cloref1> b
+viewtypedef charlist = [n:int | n >= 0] list_vt(char,n)
+
+macdef ret (cs, b) = let val () = fold@ ,(cs) in ,(b) end
 
 datatype pattern =
 | Empty of ()
@@ -22,29 +23,34 @@ datatype pattern =
 
 //[end of pattern]
 
-(*
-extern
-fun lst_length {a:t@ype} (xs:list a):int
 
-implement {a:t@ype}
-length (xs) = let
-    fun len (ys:list a, n:int):int = 
-        case ys of
-        | list_nil () => n
-        | list_cons(x, ys) => len(ys, n+1)
+fun acc (p:pattern, cs: !List_vt(char), k: (!List_vt (char)) -<cloref1> bool):bool =
+    case p of
+    | Empty() => k( cs) 
+    | Char(c) => begin case+ cs of
+                    | list_vt_cons (c1, !cs1) => if (c=c1) then k(cs1) else false
+                    | list_vt_nil () => false
+                    end
+    | Plus (p1, p2) => if acc(p1, cs, k) then true else acc(p2, cs, k)
+    | Times (p1, p2) => acc(p1, cs, (lam res => acc(p2, res, k)))
+    | Star (p0) =>  if k(cs) then true
+                    else acc(p0, cs, (lam res => 
+                                        if (list_vt_length(res) = list_vt_length(cs)) then false
+                                        else acc(p, res, k)))
+
+fun accept {n:int | n >= 0}(p:pattern, s:string(n)):bool =
+let
+    val exploded_s = string_explode(s)
+    val matches = acc (p, exploded_s, lam res => case res of 
+                                            | list_vt_nil () => true
+                                            | list_vt_cons(c,cs) => false)
+    val () = list_vt_free(exploded_s)
 in
-    len(xs, 0)
-end 
-//[end of length]
-*)
-
-(*
-extern
-fun accept (p:pattern, s:string)
-*)
+    matches
+end
 
 implement
-main () = let val abc = string_explode("abc"); val () = println! (list_vt_length(abc)); val () = list_vt_free(abc) in end
+main () = let val () = println! (accept(Empty,"abc")) in end
 
 
 //end of [pattern.dats]
