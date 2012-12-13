@@ -9,6 +9,8 @@
 staload UN = "prelude/SATS/unsafe.sats"
 staload "prelude/DATS/list.dats"
 staload "prelude/DATS/list_vt.dats"
+staload "dfa.sats"
+dynload "dfa.dats"
 
 typedef cont (a:t@ype, b:t@ype) = (a) -<cloref1> b
 typedef charlist = List(char)
@@ -56,38 +58,72 @@ fun {n,m:int | n >= 0; m <= n} gen(last_child:pattern, p:string(n),i:int(m),len:
 *)
 
 
-fun acc (p:pattern, cs: charlist, k: cont(charlist,bool)):bool =
+fun acc_cont (p:pattern, cs: charlist, k: cont(charlist,bool)):bool =
     case p of
-    | Empty() => k( cs) 
+    | Empty() => k(cs) 
     | Char(c) => begin case+ cs of
         | c1 :: cs1 => if (c=c1) then k(cs1) else false
         | nil () => false
         end
     | Plus (p1, p2) => 
-        if acc(p1, cs, k) then true else acc(p2, cs, k)
-    | Times (p1, p2) => acc(p1, cs, (lam res => acc(p2, res, k)))
-    | Paren (p0) => acc(p0, cs, k)
+        if acc_cont(p1, cs, k) then true else acc_cont(p2, cs, k)
+    | Times (p1, p2) => acc_cont(p1, cs, (lam res => acc_cont(p2, res, k)))
+    | Paren (p0) => acc_cont(p0, cs, k)
     | Star (p0) =>  
         if k(cs) then true
-        else acc(p0, cs, (lam res => 
+        else acc_cont(p0, cs, (lam res => 
                             if (list_length(res) = list_length(cs)) then false
-                            else acc(p, res, k)))
-// end of [acc]
+                            else acc_cont(p, res, k)))
+// end of [acc_cont]
 
-fun accept {n:int | n >= 0}(p:pattern, s:string(n)):bool =
+fun accept_cont {n:int | n >= 0}(p:pattern, s:string(n)):bool =
 let
     val cs = string_explode(s)
     val cs2 = $UN.castvwtp1 {charlist} (cs)
-    val matches = acc (p, cs2, lam res => case res of nil () => true | cons _ => false)
+    val matches = acc_cont (p, cs2, lam res => case res of nil () => true | cons _ => false)
     val () = list_vt_free(cs)
 in
     matches
 end
-//end of [accept]
+//end of [accept_cont]
+
+fun acc_dfa (p:dfa, cs:charlist,st:state(*current state*)):bool =
+    case cs of
+    | c1 :: cs1 =>  let val next_st = dfa_lookup(p, st, Ch c1)
+                    in case+ next_st of
+                            | Accept () => true
+                            | Reject () => false
+                            | st2   => acc_dfa(p, cs1, st2)
+                    end
+    | nil () => let val next_st = dfa_lookup(p, st, End ())
+                in case+ next_st of
+                        | Accept () => true
+                        | Reject () => false
+                        | _ => false (* shouldn't happen *) 
+                end
+//end of [acc_dfa]
+
+fun accept_dfa {n:int | n >= 0} (p:dfa, s:string(n)):bool =
+let
+    val cs = string_explode(s)
+    val cs2 = $UN.castvwtp1 {charlist} (cs)
+    val matches = acc_dfa (p, cs2, Start ())
+    val () = list_vt_free(cs)
+in
+    matches
+end
+//end of [accept_dfa]
+
 
 
 implement
-main () = let val () = println! (accept(Empty,"abc")) in end
+main () =  
+let
+    val p1 = Times(Char('a'),Star(Char('a')))
+    val p2 = (Start, Ch 'a', State 1) :: (State 1, Ch 'a', State 1) :: (State 1, End, Accept) :: nil
+    val () = println! ("accept_cont: ", accept_cont(p1,"aaa")) 
+    val () = println! ("accept_dfa: ", accept_dfa(p2, "aaa"))
+in end
 
 
 
