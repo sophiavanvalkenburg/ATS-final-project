@@ -1,8 +1,8 @@
 # makefile for final project
 
 testp: pattern.dats ; atscc -tc $^
-testd: dfa.dats ; atscc -tc $^
+testf: finite_am.dats ; atscc -tc $^
 
-test: testp testd
+test: testp testf
 
-pattern: dfa.sats dfa.dats pattern.dats ; atscc -o pattern $^
+pattern: finite_am.sats finite_am.dats pattern.dats ; atscc -o pattern $^

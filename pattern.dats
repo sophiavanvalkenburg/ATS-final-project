@@ -9,8 +9,9 @@
 staload UN = "prelude/SATS/unsafe.sats"
 staload "prelude/DATS/list.dats"
 staload "prelude/DATS/list_vt.dats"
-staload "dfa.sats"
-dynload "dfa.dats"
+staload "finite_am.sats"
+staload "finite_am.dats"
+dynload "finite_am.dats"
 
 typedef cont (a:t@ype, b:t@ype) = (a) -<cloref1> b
 typedef charlist = List(char)
@@ -57,6 +58,44 @@ fun {n,m:int | n >= 0; m <= n} gen(last_child:pattern, p:string(n),i:int(m),len:
             end
 *)
 
+fun p2n(p:pattern):nfa =
+case p of
+| Empty ()      => nil
+| Char c        => ((State i1, NCh c, State (i+1)) :: nil
+| Plus (p1, p2) => 
+    let
+        val (d1,j)1 = p2n(p1,i+1,i+1)
+        val (d2,k) = p2n(p2,j+1)
+        val d3 = (State i, Eps, State (i+1)) :: (State i, Eps, State (j+1)) :: nil
+        val d4 = (State j, Eps, State (k+1)) :: (State k, Eps, State (k+1)) :: nil
+    in
+        (d3+d1+d2+d4,k+1)
+    end
+| Times (p1, p2)=>
+    let
+        val (d1,j) = p2n(p1,i+1)
+        val (d2, k) = p2n(p2,j+1)
+        val d3 = (State i, Eps, State (i+1)) :: (State j, Eps, State (j+1)) :: (State k, Eps, State (k+1)):: nil
+    in
+        (d1+d2+d3,k+1)
+    end
+| Paren p1  => p2n(p1,i)
+| Star p1   => 
+    let 
+        val (d1,j) = p2n(p1,i+1)
+        val d2 = (State i, Eps, State (i+1)) :: (State j, Eps, State i) :: nil
+    in
+       (d1+d2, i)
+    end
+
+fun pattern_to_dfa(p:pattern):dfa =
+let
+    val (n0, _) = p2n(p, 1)
+    val n1 = (Start, Eps, State 1) :: nil
+    val n = n1 + n0
+in 
+    nfa_to_dfa(n)
+end
 
 fun acc_cont (p:pattern, cs: charlist, k: cont(charlist,bool)):bool =
     case p of
@@ -89,18 +128,20 @@ end
 
 fun acc_dfa (p:dfa, cs:charlist,st:state(*current state*)):bool =
     case cs of
-    | c1 :: cs1 =>  let val next_st = dfa_lookup(p, st, Ch c1)
-                    in case+ next_st of
-                            | Accept () => true
-                            | Reject () => false
-                            | st2   => acc_dfa(p, cs1, st2)
-                    end
-    | nil () => let val next_st = dfa_lookup(p, st, End ())
-                in case+ next_st of
-                        | Accept () => true
-                        | Reject () => false
-                        | _ => false (* shouldn't happen *) 
-                end
+    | c1 :: cs1 =>  
+        let val next_st = dfa_lookup(p, st, Ch c1)
+        in case+ next_st of
+            | Accept () => true
+            | Reject () => false
+            | st2   => acc_dfa(p, cs1, st2)
+        end
+    | nil () => 
+        let val next_st = dfa_lookup(p, st, End ())
+        in case+ next_st of
+            | Accept () => true
+            | Reject () => false
+            | _ => false 
+        end
 //end of [acc_dfa]
 
 fun accept_dfa {n:int | n >= 0} (p:dfa, s:string(n)):bool =
@@ -119,13 +160,14 @@ end
 implement
 main () =  
 let
-    val p1 = Times(Char('a'),Star(Char('a')))
-    val p2 = (Start, Ch 'a', State 1) :: (State 1, Ch 'a', State 1) :: (State 1, End, Accept) :: nil
-    val () = println! ("accept_cont: ", accept_cont(p1,"aaa")) 
-    val () = println! ("accept_dfa: ", accept_dfa(p2, "aaa"))
+    val p1 = Star(Char('a'))
+    val p2 = (Start, Ch 'a', Start) :: (Start, End, Accept) :: nil
+    val p3 = Plus(Star(Char 'a'),Char 'b')
+    val (n,_) = p2n(p3,1)
+    val () = print_nfa(n)
+    val () = println! ("accept_cont: ", accept_cont(p1,"aaaaaaaaaaaaaaaaaaaaaaaaaaa")) 
+    val () = println! ("accept_dfa: ", accept_dfa(p2, "aaaaaaaaaaaaaaaaaaaaaaaaaaa"))
 in end
-
-
 
 
 //end of [pattern.dats]
