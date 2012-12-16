@@ -1,8 +1,8 @@
 (* finite_am.sats
  * by Sophia van Valkenburg
  * 
- * a collection of data types representing dfa and nfa
- * helpful functions for dfa and nfa
+ * a collection of data types representing nfa
+ * helpful functions for nfa
  *)
 
 staload "prelude/DATS/list.dats"
@@ -15,18 +15,19 @@ datatype state =
 
 datatype input =
 | Ch of char
+| Eps of ()
 | End of ()
 
-datatype input_nfa =
-| NCh of char
-| Eps of ()
-| NEnd of ()
-
 typedef transition = (state (*current state*), input, state (*next state*))
-typedef Ntransition = (state, input_nfa, state)
-typedef dfa = List(transition)
-typedef nfa = List(Ntransition)
+typedef nfa = List(transition)
 
-fun dfa_lookup (d:dfa, st:state, a:input):state
-fun nfa_to_dfa (n:nfa):dfa
+typedef state_set = List(state)
 
+fun nfa_lookup(n:nfa, st:state, a:input):state_set
+
+fun state_eq (s1:state, s2:state):bool
+fun input_eq(c1:input, c2:input):bool
+fun add_to_set(s:state,ss:state_set):state_set
+fun combine_sets(s1:state_set,s2:state_set):state_set
+fun set_contains(z1:state_set, z2:state_set):bool
+fun set_eq(s1:state_set, s2:state_set):bool

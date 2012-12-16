@@ -1,7 +1,7 @@
 (* finite_am.dats
  * by Sophia van Valkenburg
  *
- * functions for the nfa and dfa
+ * functions for the nfa
  *)
 
 staload "finite_am.sats"
@@ -11,72 +11,82 @@ staload "finite_am.sats"
 #define cons list_cons
 
 implement
-dfa_lookup(d, st, a) =
+state_eq(s1,s2) = 
+    case+ (s1,s2) of
+    | (State i, State j) => if (i=j) then true else false
+    | (Start (), Start () ) => true
+    | (Accept (), Accept ()) => true
+    | (Reject (), Reject ()) => true
+    | (_,_) => false
+//end of [state_eq]
+
+implement
+input_eq(c1,c2) =
+    case+ (c1, c2) of
+    | (Ch a, Ch b) => if (a=b) then true else false
+    | (Eps (), Eps() ) => true
+    | (End (), End () ) => true
+    | (_,_) => false
+//end of [input_eq] 
+ 
+implement
+add_to_set(s,ss) =
 let
-    fun state_eq (s1:state, s2:state):bool =
-        case+ (s1,s2) of
-        | (State i, State j) => if (i=j) then true else false
-        | (Start (), Start () ) => true
-        | (Accept (), Accept ()) => true
-        | (Reject (), Reject ()) => true
-        | (_,_) => false
-    //end of [state_eq]
-    
-    fun input_eq(c1:input, c2:input):bool =
-        case+ (c1, c2) of
-        | (Ch a, Ch b) => if (a=b) then true else false
-        | (End (), End () ) => true
-        | (_,_) => false
-    //end of [input_eq]
+    fun add(s:state, ss0:state_set, ss:state_set):state_set =
+        case ss0 of
+        | s0 :: ss1 => if state_eq(s0,s) then ss else add(s,ss1,ss)
+        | nil () => s :: ss
+    //end of [add]
 in
-    case d of
-    | (s1, b, s2) :: d1 =>  if (state_eq(s1, st) && input_eq(a, b)) then s2 
-                            else dfa_lookup(d1, st, a)
-    | nil () => Reject ()
+    add(s,ss,ss)
 end
+//end of [add_to_set]
 
 implement
-nfa_to_dfa(n) = nil
+combine_sets(s1,s2) =
+    case+ s1 of
+    | s0 :: ss => combine_sets(ss,add_to_set(s0,s2))
+    | nil () => s2
+//end of [combine_sets]
 
 
-extern
-fun print_input(i:input_nfa):void
+//z2 contains all elements of z1
 implement
-print_input(i) = 
-case i of
-| NCh c => println! (c)
-| Eps () => println! ("Eps")
-| NEnd () => println! ("End")
-
-extern
-fun print_state(s:state):void
-implement
-print_state(s) = 
-case s of
-| State i => println! ("State ", i)
-| Start () => println! ("Start")
-| Accept () => println! ("Accept")
-| Reject () => println! ("Reject")
-
-extern
-fun print_Ntrans(t:Ntransition):void
-implement
-print_Ntrans(t) =
+set_contains(z1,z2) =
 let
-    val (s1, i, s2) = t
-    val () = print_state(s1)
-    val () = print_input(i)
-    val () = print_state(s2)
-    val () = println! ("--")
-in end
+    fun contains(s:state, ss:state_set):bool =
+    case ss of
+        | s0 :: ss0 => if state_eq(s,s0) then true else contains(s,ss0)
+        | nil () => false
+    //[end of contains]
+in
+    case z1 of
+    | z10 :: z1s => if contains(z10, z2) then set_contains(z1s, z2) else false
+    | nil () => true
+end
+//end of [set_contains]
 
-extern
-fun print_nfa(n:nfa):void
 implement
-print_nfa(n) =
-case n of
-| t :: n1 => let val () = print_Ntrans(t); val () = print_nfa(n1) in end
-| nil => println! (" nil")
+set_eq(s1,s2) = if (set_contains(s1,s2) && set_contains(s2, s1)) then true else false
+//end of [set_eq]
 
+implement
+nfa_lookup(n,st,a) =
+let
+    fun lookup(n:nfa,nn:nfa,st:state,a:input,sts:state_set):state_set =
+        case+ nn of
+        | nil () => sts
+        | (s1, b, s2) :: n1 => begin 
+            case b of
+            | Eps () => if state_eq(s1, st) then combine_sets(lookup(n,n1,st,a,sts),lookup(n,n,s2,a,sts)) 
+                        else lookup(n,n1,st,a,sts)
+            | _ =>  if (state_eq(s1, st) && input_eq(a, b)) then lookup(n,n1,st,a,add_to_set(s2,sts)) 
+                    else lookup(n,n1, st, a, sts)
+        end
+    //end of [lookup]
+in
+    lookup(n,n,st,a,nil)
+end
+//end of [nfa_lookup]
 
 //end of [finite_am.dats]

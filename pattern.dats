@@ -9,95 +9,72 @@
 staload UN = "prelude/SATS/unsafe.sats"
 staload "prelude/DATS/list.dats"
 staload "prelude/DATS/list_vt.dats"
+
 staload "finite_am.sats"
 staload "finite_am.dats"
 dynload "finite_am.dats"
 
-typedef cont (a:t@ype, b:t@ype) = (a) -<cloref1> b
-typedef charlist = List(char)
+staload "pattern.sats"
 
 #define nil list_nil
 #define :: list_cons
 #define cons list_cons
 
-datatype pattern =
-| Empty of ()
-| Char of char
-| Plus of (pattern, pattern)
-| Times of (pattern, pattern)
-| Paren of (pattern) (** paren is a dummy node to handle parentheses in the syntax **)
-| Star of (pattern)
 
-//[end of pattern]
-(*
-exception ParseError of (string)
-
-//generates a pattern given the pattern string
-fun {n,m:int | n >= 0; m <= n} gen(last_child:pattern, p:string(n),i:int(m),len:int(n)):(pattern,int) =
-    if (i=len) then (last_child,len) 
-    else begin case p[i] of 
-                | '(' => let 
-                            val (in_paren,j) = gen(Empty(), p, i+1, len)
-                            val paren = Paren(in_paren)
-                            val (rest, k) = gen(paren,p,j,len)
-                         in
-                            case last_child of
-                            | Empty () => (rest,k)
-                            | p0 => (Times(p0,rest),k)
-                         end
-                | ')' => (last_child,i+1)
-                | '*' => gen(Star(last_child), p, i+1, len)
-                | '|' => Plus(last_child,gen(Empty(),p,i+1, len))
-                |  c  => let
-                            val (rest,j) = gen(Char c, p, i+1, len)
-                         in
-                            case last_child of
-                            | Empty () => (rest, j)
-                            | p0 => (Times(p0, rest),j)
-                        end
-            end
-*)
-
-fun p2n(p:pattern):nfa =
+// convert a pattern to an nfa
+extern
+fun p2n(p:pattern,i1:int(*current state*),i2:int(*next state*)):(nfa,int,int)
+implement
+p2n(p,i1,i2) =
 case p of
-| Empty ()      => nil
-| Char c        => ((State i1, NCh c, State (i+1)) :: nil
+| Empty ()      => (nil,i1,i2)
+| Char c        => ((State i2, Ch c, State (i2+1)) :: nil,i2+1,i2+2)
 | Plus (p1, p2) => 
     let
-        val (d1,j)1 = p2n(p1,i+1,i+1)
-        val (d2,k) = p2n(p2,j+1)
-        val d3 = (State i, Eps, State (i+1)) :: (State i, Eps, State (j+1)) :: nil
-        val d4 = (State j, Eps, State (k+1)) :: (State k, Eps, State (k+1)) :: nil
+        val (d1,j1,j2) = p2n(p1,i1,i2)
+        val (d2,k1,k2) = p2n(p2,j1,j2)
+        val d3 = (State i1, Eps, State i2) :: (State i1, Eps, State j2) :: nil
+        val d4 = (State j1, Eps, State k2) :: (State k1, Eps, State k2) :: nil
     in
-        (d3+d1+d2+d4,k+1)
+        (d3+d1+d2+d4,k2,k2+1)
     end
 | Times (p1, p2)=>
     let
-        val (d1,j) = p2n(p1,i+1)
-        val (d2, k) = p2n(p2,j+1)
-        val d3 = (State i, Eps, State (i+1)) :: (State j, Eps, State (j+1)) :: (State k, Eps, State (k+1)):: nil
+        val (d1,j1,j2) = p2n(p1,i1,i2)
+        val (d2, k1,k2) = p2n(p2,j1,j2)
+        val d3 = (State i1, Eps, State i2) :: (State j1, Eps, State j2) :: (State k1, Eps, State k2):: nil
     in
-        (d1+d2+d3,k+1)
+        (d1+d2+d3,k2,k2+1)
     end
-| Paren p1  => p2n(p1,i)
+| Paren p1  => p2n(p1,i1,i2)
 | Star p1   => 
     let 
-        val (d1,j) = p2n(p1,i+1)
-        val d2 = (State i, Eps, State (i+1)) :: (State j, Eps, State i) :: nil
+        val (d1,j1,j2) = p2n(p1,i2,i2+1)
+        val d2 = (State i1, Eps, State i2) :: (State i2, Eps, State (i2+1)) :: (State j1, Eps, State i2) :: nil
     in
-       (d1+d2, i)
+       (d1+d2,i2,j2)
     end
+//end of [p2n]
 
-fun pattern_to_dfa(p:pattern):dfa =
+implement
+pattern_to_nfa(p) =
 let
-    val (n0, _) = p2n(p, 1)
-    val n1 = (Start, Eps, State 1) :: nil
-    val n = n1 + n0
+    val (n0, last, _) = p2n(p,0,1)
+    val n1 = (Start, Eps, State 0) :: (State last, End, Accept) :: nil
 in 
-    nfa_to_dfa(n)
+    n1 + n0
 end
+//end of [pattern_to_nfa]
 
-fun acc_cont (p:pattern, cs: charlist, k: cont(charlist,bool)):bool =
+(* 
+ * ***********************************
+ * pattern matching continuation style
+ * ***********************************
+ *)
+extern   
+fun acc_cont (p:pattern, cs: charlist, k: cont(charlist,bool)):bool
+implement
+acc_cont(p,cs,k) =
     case p of
     | Empty() => k(cs) 
     | Char(c) => begin case+ cs of
@@ -115,7 +92,8 @@ fun acc_cont (p:pattern, cs: charlist, k: cont(charlist,bool)):bool =
                             else acc_cont(p, res, k)))
 // end of [acc_cont]
 
-fun accept_cont {n:int | n >= 0}(p:pattern, s:string(n)):bool =
+implement
+accept_cont (p, s) =
 let
     val cs = string_explode(s)
     val cs2 = $UN.castvwtp1 {charlist} (cs)
@@ -126,48 +104,49 @@ in
 end
 //end of [accept_cont]
 
-fun acc_dfa (p:dfa, cs:charlist,st:state(*current state*)):bool =
+
+(* 
+ * **************************
+ * pattern matching nfa style
+ * **************************
+ *)
+extern
+fun acc_nfa (p:nfa, cs:charlist,st:state(*current state*)):bool
+implement
+acc_nfa(p,cs,st) =
+let
+    fun all_acc_nfa(p:nfa, cs:charlist,sts:state_set):bool =
+        case sts of
+        | nil () => false
+        | s1 :: rest => if acc_nfa(p,cs,s1) then true 
+                        else all_acc_nfa(p,cs,rest)
+    //end of [all_acc_nfa]
+in
     case cs of
     | c1 :: cs1 =>  
-        let val next_st = dfa_lookup(p, st, Ch c1)
-        in case+ next_st of
-            | Accept () => true
-            | Reject () => false
-            | st2   => acc_dfa(p, cs1, st2)
+        let val states = nfa_lookup(p, st, Ch c1)
+        in  all_acc_nfa(p,cs1,states) 
         end
     | nil () => 
-        let val next_st = dfa_lookup(p, st, End ())
-        in case+ next_st of
-            | Accept () => true
-            | Reject () => false
-            | _ => false 
+        let val states = nfa_lookup(p, st, End )
+        in  if set_contains(Accept :: nil, states) then true
+            else false
         end
-//end of [acc_dfa]
+end
+//end of [acc_nfa]
 
-fun accept_dfa {n:int | n >= 0} (p:dfa, s:string(n)):bool =
+implement
+accept_nfa (p, s) =
 let
     val cs = string_explode(s)
     val cs2 = $UN.castvwtp1 {charlist} (cs)
-    val matches = acc_dfa (p, cs2, Start ())
+    val n = pattern_to_nfa(p)
+    val matches = acc_nfa (n, cs2, Start)
     val () = list_vt_free(cs)
 in
     matches
 end
-//end of [accept_dfa]
-
-
-
-implement
-main () =  
-let
-    val p1 = Star(Char('a'))
-    val p2 = (Start, Ch 'a', Start) :: (Start, End, Accept) :: nil
-    val p3 = Plus(Star(Char 'a'),Char 'b')
-    val (n,_) = p2n(p3,1)
-    val () = print_nfa(n)
-    val () = println! ("accept_cont: ", accept_cont(p1,"aaaaaaaaaaaaaaaaaaaaaaaaaaa")) 
-    val () = println! ("accept_dfa: ", accept_dfa(p2, "aaaaaaaaaaaaaaaaaaaaaaaaaaa"))
-in end
+//end of [accept_nfa]
 
 
 //end of [pattern.dats]
