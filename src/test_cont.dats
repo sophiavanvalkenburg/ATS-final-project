@@ -17,6 +17,6 @@ let
     // (a|b)*(abb|a+b)
     val p2 = Times(Star(Plus(Char 'a', Char 'b')), Plus(Times(Times(Char 'a', Char 'b'), Char 'b'),Times(Times(Char 'a', Star(Char 'a')),Char 'b')))
  
-    val () = println! ("p1: ", accept_cont(p1, "ababababababababababababababababababab"))   
+    val () = println! ("p1: ", accept_cont(p1, "ababababababababababababababababababab"))
     val () = println! ("p2: ", accept_cont(p2, "ababbbbbbbbbbbb"))
 in end

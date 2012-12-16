@@ -1,4 +1,6 @@
 
+source code is also available at http://www.github.com/sophiavv/ATS-final-project
+
 datatypes and functions relating to nfa are in finite_am.[s|d]ats
 datatypes and functions relating to pattern matching are in pattern.[s|d]ats
 tests for continuation style pattern matching are in test_cont.dats
