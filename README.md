@@ -1,5 +1,5 @@
 
-source code is also available at http://www.github.com/sophiavv/ATS-final-project
+source code is also available at http://www.github.com/sophiavanvalkenburg/ATS-final-project
 
 datatypes and functions relating to nfa are in finite_am.[s|d]ats
 datatypes and functions relating to pattern matching are in pattern.[s|d]ats
